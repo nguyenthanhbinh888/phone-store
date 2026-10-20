@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # 1. MySQL 8.0 Database Service
+  mysql:
+    image: mysql:8.0
+    container_name: phone_store_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root123456}
+      MYSQL_DATABASE: ${DB_NAME:-phone_store_db}
+      MYSQL_USER: ${DB_USER:-phonestore}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-phonestore123}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-root123456}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - phone_store_net
+
+  # 2. Spring Boot Backend Service
+  backend:
+    build:
+      context: ./phone-store-backend
+      dockerfile: Dockerfile
+    container_name: phone_store_backend
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/${DB_NAME:-phone_store_db}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      DB_USERNAME: ${DB_USER:-phonestore}
+      DB_PASSWORD: ${DB_PASSWORD:-phonestore123}
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    ports:
+      - "8080:8080"
+    networks:
+      - phone_store_net
+
+  # 3. React Frontend Service
+  frontend:
+    build:
+      context: ./phone-store-frontend
+      dockerfile: Dockerfile
+    container_name: phone_store_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - phone_store_net
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  phone_store_net:
+    driver: bridge
